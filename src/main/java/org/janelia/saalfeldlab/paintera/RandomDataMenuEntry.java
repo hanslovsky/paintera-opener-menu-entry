@@ -51,12 +51,13 @@ import org.janelia.saalfeldlab.paintera.state.RawSourceState;
 import org.janelia.saalfeldlab.paintera.ui.opendialog.VolatileHelpers;
 import org.janelia.saalfeldlab.paintera.ui.opendialog.menu.OpenDialogMenu;
 import org.janelia.saalfeldlab.paintera.ui.opendialog.menu.OpenDialogMenuEntry;
+import org.scijava.plugin.Plugin;
 
 import java.util.Random;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
-@OpenDialogMenuEntry.OpenDialogMenuEntryPath(path = "this>is>a>random>dataset")
+@Plugin(type = OpenDialogMenuEntry.class, menuPath = "this>is>a>random>dataset")
 public class RandomDataMenuEntry implements OpenDialogMenuEntry {
 
 

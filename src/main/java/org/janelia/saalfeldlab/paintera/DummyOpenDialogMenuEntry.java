@@ -10,10 +10,11 @@ import javafx.stage.Stage;
 import org.janelia.saalfeldlab.fx.ui.Exceptions;
 import org.janelia.saalfeldlab.paintera.ui.opendialog.menu.OpenDialogMenu;
 import org.janelia.saalfeldlab.paintera.ui.opendialog.menu.OpenDialogMenuEntry;
+import org.scijava.plugin.Plugin;
 
 import java.util.function.BiConsumer;
 
-@OpenDialogMenuEntry.OpenDialogMenuEntryPath(path = "sort>of>ok")
+@Plugin(type = OpenDialogMenuEntry.class, menuPath = "sort>of>ok")
 public class DummyOpenDialogMenuEntry implements OpenDialogMenuEntry {
 
 
