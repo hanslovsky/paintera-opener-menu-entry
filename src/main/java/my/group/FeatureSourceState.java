@@ -172,6 +172,14 @@ public class FeatureSourceState<D extends RealType<D> & NativeType<D>, T extends
         }
     }
 
+    @Override
+    public void onAdd(PainteraBaseView paintera) {
+        converter().minProperty().addListener(obs -> paintera.orthogonalViews().requestRepaint());
+        converter().maxProperty().addListener(obs -> paintera.orthogonalViews().requestRepaint());
+        converter().colorProperty().addListener(obs -> paintera.orthogonalViews().requestRepaint());
+        converter().alphaProperty().addListener(obs -> paintera.orthogonalViews().requestRepaint());
+    }
+
 
 
 }
