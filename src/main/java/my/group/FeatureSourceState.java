@@ -28,6 +28,7 @@ import net.imglib2.type.numeric.NumericType;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.DoubleType;
 import net.imglib2.type.volatiles.AbstractVolatileRealType;
+import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
 import org.janelia.saalfeldlab.paintera.PainteraBaseView;
 import org.janelia.saalfeldlab.paintera.composition.ARGBCompositeAlphaAdd;
@@ -104,7 +105,8 @@ public class FeatureSourceState<D extends RealType<D> & NativeType<D>, T extends
 
                 final ArrayImg<D, ?> diff = new ArrayImgFactory<>(d).create(img);
                 for (int dim = 0; dim < nDim; ++dim) {
-                    PartialDerivative.gradientCentralDifference(rawExtended, diff, dim);
+                    img.forEach(D::setZero);
+                    PartialDerivative.gradientCentralDifference(rawExtended, Views.translate(diff, Intervals.minAsLongArray(img)), dim);
                     LoopBuilder.setImages(diff, img).forEachPixel((src, tgt) -> {
                         final double val = src.getRealDouble();
                         tgt.setReal(tgt.getRealDouble() + val * val);
