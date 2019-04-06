@@ -190,14 +190,14 @@ public class FeatureSourceState<D extends RealType<D> & NativeType<D>, T extends
 
                     CellLoader<D> loader = img -> {
                         for (SourceState<? extends RealType<?>, ?> state : dependsOn) {
-                            LOG.info("Adding square of state {} with type {}", state.nameProperty().get(), state.getDataSource().getDataType());
+                            LOG.trace("Adding square of state {} with type {}", state.nameProperty().get(), state.getDataSource().getDataType());
                             LoopBuilder
                                     .setImages(Views.interval(state.getDataSource().getDataSource(0, flvl), img), img)
                                     .forEachPixel((src, tgt) -> tgt.setReal(tgt.getRealDouble() + src.getRealDouble() * src.getRealDouble()));
                         }
-                        LOG.info("Taking sqrt");
+                        LOG.trace("Taking sqrt");
                         img.forEach(px -> px.setReal(Math.sqrt(px.getRealDouble())));
-                        LOG.info("First voxel value {}", img.cursor().next());
+                        LOG.trace("First voxel value {}", img.cursor().next());
                     };
 
                     data[lvl] = factory.create(raw, loader, options);
