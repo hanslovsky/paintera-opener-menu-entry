@@ -32,10 +32,12 @@ import net.imglib2.type.volatiles.AbstractVolatileRealType;
 import net.imglib2.type.volatiles.VolatileDoubleType;
 import net.imglib2.util.Intervals;
 import net.imglib2.view.Views;
+import net.imglib2.view.composite.RealComposite;
 import org.janelia.saalfeldlab.paintera.PainteraBaseView;
 import org.janelia.saalfeldlab.paintera.composition.ARGBCompositeAlphaAdd;
 import org.janelia.saalfeldlab.paintera.data.DataSource;
 import org.janelia.saalfeldlab.paintera.data.RandomAccessibleIntervalDataSource;
+import org.janelia.saalfeldlab.paintera.data.n5.VolatileWithSet;
 import org.janelia.saalfeldlab.paintera.state.MinimalSourceState;
 import org.janelia.saalfeldlab.paintera.state.SourceState;
 import org.janelia.saalfeldlab.paintera.ui.PainteraAlerts;
@@ -215,6 +217,84 @@ public class FeatureSourceState<D extends RealType<D> & NativeType<D>, T extends
         }
     }
 
+    private static class HessianEigenvalueFeature<D extends RealType<D> & NativeType<D>, T extends AbstractVolatileRealType<D, T>> implements Feature<D, T> {
+
+        private static final Logger LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
+
+        private final D d;
+
+        private final List<SourceState<? extends RealType<?>, ?>> dependsOn;
+
+        public HessianEigenvalueFeature(
+                final D d,
+                final SourceState<? extends RealType<?>, ?>... dependsOn) {
+            this.dependsOn = Arrays.asList(dependsOn);
+            this.d = d;
+        }
+
+        @Override
+        public List<SourceState<? extends RealType<?>, ?>> dependsOn() {
+            return new ArrayList<>(dependsOn);
+        }
+
+        @Override
+        public DataSource<D, T> featureSource(final String cacheDir, final String name) {
+            // TODO check consistency of all sources, as long as it is called only privately, do not care
+            final DataSource<? extends RealType<?>, ?> dataSource = dependsOn.get(0).getDataSource();
+            final int numLevels = dataSource.getNumMipmapLevels();
+            final AffineTransform3D[] tfs = IntStream
+                    .range(0, numLevels)
+                    .mapToObj(lvl -> { AffineTransform3D tf = new AffineTransform3D(); dataSource.getSourceTransform(0, lvl, tf); return tf;})
+                    .toArray(AffineTransform3D[]::new);
+
+            final RandomAccessibleInterval<D>[] data = new RandomAccessibleInterval[numLevels];
+            final RandomAccessibleInterval<T>[] vdata = new RandomAccessibleInterval[numLevels];
+
+            final DiskCachedCellImgOptions options = DiskCachedCellImgOptions
+                    .options()
+                    .tempDirectory(Paths.get(cacheDir))
+                    .tempDirectoryPrefix("gradient-")
+                    .deleteCacheDirectoryOnExit(true)
+                    .cellDimensions(32, 32, 32)
+                    .volatileAccesses(true);
+
+
+            for (int lvl = 0; lvl < numLevels; ++lvl) {
+                final RandomAccessibleInterval<D> raw = Converters.convert(
+                        dataSource.getDataSource(0, lvl),
+                        (src, tgt) -> tgt.setReal(src.getRealDouble()),
+                        d.createVariable());
+                final DiskCachedCellImgFactory<D> factory = new DiskCachedCellImgFactory<>(d, options);
+                final int flvl = lvl;
+
+                CellLoader<D> loader = img -> {
+                    for (SourceState<? extends RealType<?>, ?> state : dependsOn) {
+                        LOG.trace("Adding square of state {} with type {}", state.nameProperty().get(), state.getDataSource().getDataType());
+                        LoopBuilder
+                                .setImages(Views.interval(state.getDataSource().getDataSource(0, flvl), img), img)
+                                .forEachPixel((src, tgt) -> tgt.setReal(tgt.getRealDouble() + src.getRealDouble() * src.getRealDouble()));
+                    }
+                    LOG.trace("Taking sqrt");
+                    img.forEach(px -> px.setReal(Math.sqrt(px.getRealDouble())));
+                    LOG.trace("First voxel value {}", img.cursor().next());
+                };
+
+                data[lvl] = factory.create(raw, loader, options);
+                vdata[lvl] = VolatileViews.wrapAsVolatile(data[lvl]);
+            }
+            return new RandomAccessibleIntervalDataSource<>(
+                    data,
+                    vdata,
+                    tfs,
+                    () -> {
+                    },
+                    new InterpolationFunc<>(),
+                    new InterpolationFunc<>(),
+                    name);
+        }
+    }
+
+
     private final Feature<D, T> feature;
 
     private FeatureSourceState(
@@ -267,6 +347,8 @@ public class FeatureSourceState<D extends RealType<D> & NativeType<D>, T extends
                 if (bt.filter(ButtonType.OK::equals).isPresent() && comboBox.getValue() != null) {
                     final SourceState<? extends RealType<?>, ?> raw = comboBox.getValue();
                     final int nDim = raw.getDataSource().getDataSource(0, 0).numDimensions();
+                    final ChannelFeatureSourceState.GradientFeature<DoubleType, VolatileDoubleType> gradientFeature = new ChannelFeatureSourceState.GradientFeature<>(new DoubleType(), raw, directory);
+                    ChannelFeatureSourceState<DoubleType, VolatileDoubleType, RealComposite<DoubleType>, VolatileWithSet<RealComposite<VolatileDoubleType>>> gradientState = new ChannelFeatureSourceState<>(gradientFeature, "gradients", directory);
                     final FeatureSourceState<? extends RealType<?>, ?>[] gradients = IntStream
                             .range(0, nDim)
                             .mapToObj(dim -> new GradientFeature<DoubleType, VolatileDoubleType>(dim, new DoubleType(), raw))
@@ -281,6 +363,7 @@ public class FeatureSourceState<D extends RealType<D> & NativeType<D>, T extends
                     gradients[2].converter().colorProperty().set(Colors.toARGBType("#0000ff"));
                     Stream.of(gradients).forEach(pbv::addState);
                     Stream.of(magnitude).forEach(pbv::addState);
+                    Stream.of(gradientState).forEach(pbv::addState);
                 }
             };
         }
